@@ -102,7 +102,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v1.8 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v1.9 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -224,9 +224,13 @@ function wireDrop(zoneId, inputId, nameId, type) {
   const input = document.getElementById(inputId);
   const name = document.getElementById(nameId);
   input.addEventListener('change', () => { if (input.files[0]) setFile(input.files[0], type, zone, name); });
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0], type, zone, name); });
+  // The invisible file input covers the entire zone, so drag events land on it, not the zone div.
+  // Wire drag listeners on both so drop works whether the event hits the input or the zone.
+  [zone, input].forEach(el => {
+    el.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    el.addEventListener('dragleave', e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over'); });
+    el.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f) setFile(f, type, zone, name); });
+  });
 }
 
 function setFile(file, type, zone, nameEl) {
@@ -604,7 +608,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     // ── Debug panel ──
     const debugPanel = document.getElementById('debugPanel');
     const modeNote = `Mode: G90 absolute (default)\nCircumference used: ${(cncData.pipeSize ? cncData.pipeSize.circumference : 62.83185).toFixed(4)}"`;
-    const allCutsSummary = allCuts.map(c => `   CUT id=${c.id}: ${c.deg.toFixed(1)}° @ Y=${c.y.toFixed(2)}" ${endCuts.includes(c) ? '➠ END CUT' : ''}`).join('\n');
+    const allCutsSummary = allCuts.map(c => `  CUT id=${c.id}: ${c.deg.toFixed(1)}° @ Y=${c.y.toFixed(2)}" ${endCuts.includes(c) ? '← END CUT' : ''}`).join('\n');
     debugPanel.textContent = [
       modeNote,
       '',
@@ -625,7 +629,25 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     // ── Banner ──
     const banner = document.getElementById('statusBanner');
     if (!sizePass) {
-      banner.textContent = '曟 PIPE SIZE MISMATCH — DO NOT RUN PROGRAM';
+      banner.textContent = '⛔ PIPE SIZE MISMATCH — DO NOT RUN PROGRAM';
       banner.className = 'status-banner fail';
     } else if (anyFail) {
-      banner.textContent = '⚠️ REVIEW REQUIRED ┄ SOME NOZZLE LOCAD���2�TTBEDT�D���s��&��W"�6�74��R�w7FGW2�&��W"v&�s���V�6R��&��W"�FW�D6��FV�B�~)�R������rt��B(	B�������R��4D���24��4�5DT�Bs��&��W"�6�74��R�w7FGW2�&��W"72s��Р�F�7V�V�B�vWDV�V�V�D'��B�v��F��rr��7G��R�F�7���v���Rs��F�7V�V�B�vWDV�V�V�D'��B�w&W7V�G2r��7G��R�F�7���v&��6�s����6F6��W'"���F�7V�V�B�vWDV�V�V�D'��B�v��F��rr��7G��R�F�7���v���Rs���W'B�tW'&�"�Ǘ���rf��W3�r�W'"��W76vR���6��6��R�W'&�"�W'"���Чғ����67&�C���&�G�����F���
+      banner.textContent = '⚠️ REVIEW REQUIRED — SOME NOZZLE LOCATIONS NEED ATTENTION';
+      banner.className = 'status-banner warn';
+    } else {
+      banner.textContent = '✅ LOOKING GOOD — ALL NOZZLE LOCATIONS CONSISTENT';
+      banner.className = 'status-banner pass';
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+
+  } catch(err) {
+    document.getElementById('loading').style.display = 'none';
+    alert('Error analyzing files: ' + err.message);
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>
