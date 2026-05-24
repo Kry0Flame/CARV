@@ -306,10 +306,10 @@
 
   <!-- Seam angle input -->
   <div class="seam-row">
-    <label>Seam Angle (from print):</label>
-    <input type="number" id="seamAngle" min="0" max="359" value="315" />
+    <label>Seam Angle:</label>
+    <input type="number" id="seamAngle" min="0" max="359" value="" placeholder="—" />
     <span style="color:var(--text-dim)">°</span>
-    <span class="seam-hint">Enter the seam weld location in degrees as shown on the print.</span>
+    <span class="seam-hint" id="seamHint">Auto-detected from print when PDF is loaded. Override here if needed.</span>
     <span class="seam-detected" id="seamDetected"></span>
   </div>
 
@@ -451,11 +451,50 @@ function wireDrop(zoneId, inputId, nameId, type) {
 }
 
 function setFile(file, type, zone, nameEl) {
-  if (type === 'pdf') pdfFile = file;
-  else               cncFile = file;
-  zone.classList.add('loaded');
-  nameEl.textContent = '✓ ' + file.name;
+  if (type === 'pdf') {
+    pdfFile = file;
+    zone.classList.add('loaded');
+    nameEl.textContent = '✓ ' + file.name;
+    // Auto-detect seam angle immediately on PDF drop
+    autoDetectSeam(file);
+  } else {
+    cncFile = file;
+    zone.classList.add('loaded');
+    nameEl.textContent = '✓ ' + file.name;
+  }
   updateBtn();
+}
+
+async function autoDetectSeam(file) {
+  const detected = document.getElementById('seamDetected');
+  const input    = document.getElementById('seamAngle');
+  detected.textContent = '⏳ Reading print...';
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc   = await page.getTextContent();
+      fullText  += tc.items.map(t => t.str).join(' ') + '\n';
+    }
+    // Match "315° S E A M" or "SEAM 315°" patterns
+    const seamM = fullText.match(/(\d{1,3})°[\s\r\n]*S[\s\r\n]*E[\s\r\n]*A[\s\r\n]*M/i)
+               || fullText.match(/SEAM[\s\r\n]*(\d{1,3})°/i)
+               || fullText.match(/(\d{1,3})°[\s\r\n]*SEAM/i);
+    if (seamM) {
+      const angle = parseInt(seamM[1]);
+      input.value = angle;
+      detected.textContent = `✓ Detected: ${angle}°`;
+      detected.style.color = 'var(--green)';
+    } else {
+      detected.textContent = '⚠ Not found — enter manually';
+      detected.style.color = 'var(--yellow)';
+    }
+  } catch (e) {
+    detected.textContent = '⚠ Could not read PDF';
+    detected.style.color = 'var(--yellow)';
+  }
 }
 
 function updateBtn() {
@@ -598,12 +637,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     ]);
     const cncData = parseCNC(cncText);
 
-    // ── Update detected seam angle
-    if (pdfData.seamAngle !== null) {
-      document.getElementById('seamAngle').value = pdfData.seamAngle;
-      document.getElementById('seamDetected').textContent =
-        `✓ Auto-detected: ${pdfData.seamAngle}°`;
-    }
+    // Seam angle was already auto-detected on PDF drop — just use whatever is in the field
 
     // ── Pipe size check
     const cncOD    = cncData.pipeSize ? Math.round(cncData.pipeSize.od * 10) / 10 : null;
