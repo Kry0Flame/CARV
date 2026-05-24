@@ -18,7 +18,7 @@ header { background: var(--surface); border-bottom: 1px solid var(--border); pad
 .logo { font-size: 22px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
 .logo span { color: var(--text-dim); font-weight: 400; font-size: 13px; letter-spacing: 1px; }
 .version { font-size: 11px; color: var(--text-dim); margin-left: auto; }
-main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
 .drop-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: var(--surface); position: relative; }
 .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--surface2); }
@@ -60,12 +60,14 @@ td.pass { color: var(--green); font-weight: 700; }
 td.fail { color: var(--red); font-weight: 700; }
 td.warn { color: var(--yellow); font-weight: 700; }
 td.scribe { color: var(--scribe); }
-td.dim { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.nozzle-label { font-weight: 800; font-size: 15px; }
 .scribe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 24px; }
 .scribe-chip { background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.25); border-radius: 6px; padding: 8px 12px; font-size: 12px; }
 .scribe-chip .sc-label { color: var(--scribe); font-weight: 700; font-size: 11px; }
 .scribe-chip .sc-val { color: var(--text); margin-top: 2px; }
 .pdf-preview { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 24px; max-height: 180px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--text-dim); line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+.seam-warn { background: rgba(210,153,34,.1); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: var(--yellow); display: none; }
 #loading { display: none; text-align: center; padding: 40px; color: var(--text-dim); font-size: 15px; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -77,7 +79,7 @@ td.dim { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v1.2 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v1.3 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -97,15 +99,14 @@ td.dim { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 </div>
 
-<!-- Seam angle hidden — auto-detected from PDF -->
 <input type="hidden" id="seamAngle" value="" />
-
 <button id="btnCheck" disabled>DROP BOTH FILES TO CHECK</button>
-
 <div id="loading"><div class="spinner"></div><div>Analyzing files...</div></div>
 
 <div id="results">
 <div class="status-banner" id="statusBanner">—</div>
+<div class="seam-warn" id="seamWarn">⚠️ Seam angle not detected from print — using 0°. Check PDF text below and set manually if needed.</div>
+
 <div class="cards">
 <div class="card"><div class="card-title">Pipe O.D. — Print</div><div class="card-value" id="cPrintOD">—</div><div class="card-sub">From certified drawing</div></div>
 <div class="card"><div class="card-title">Pipe O.D. — CNC</div><div class="card-value" id="cCNCOD">—</div><div class="card-sub">Calculated from circumference</div></div>
@@ -113,15 +114,25 @@ td.dim { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 <div class="cards">
 <div class="card"><div class="card-title">Seam Angle</div><div class="card-value" id="cSeam">—</div><div class="card-sub">Auto-detected from print</div></div>
-<div class="card"><div class="card-title">RTP Offset Applied</div><div class="card-value" id="cOffset">—</div><div class="card-sub">Degrees added to print locations</div></div>
+<div class="card"><div class="card-title">RTP Offset Applied</div><div class="card-value" id="cOffset">—</div><div class="card-sub">Degrees added to nozzle locations</div></div>
 <div class="card"><div class="card-title">CNC Program</div><div class="card-value" id="cProgram">—</div><div class="card-sub" id="cProgramSub">From sequence comment</div></div>
 </div>
-<div class="section-header"><h2>✂️ CUT FEATURES</h2><span class="count" id="cutCount">0 cuts</span><span style="margin-left:auto;font-size:12px;color:var(--text-dim);">Tolerance: ±5°</span></div>
-<div class="tbl-wrap"><table id="tblCuts"><thead><tr><th>#</th><th>Axial Position (Y)</th><th>RTP Angle</th><th>Print Angle (converted)</th><th>Closest Print Nozzle</th><th>Δ Angle</th><th>Status</th></tr></thead><tbody id="tbodyCuts"></tbody></table></div>
-<div class="section-header"><h2>🔵 SCRIBE FEATURES</h2><span class="count" id="scribeCount">0 scribes</span><span style="margin-left:auto;font-size:12px;color:var(--scribe);">Informational only — not verified against print</span></div>
+
+<div class="section-header">
+<h2>✂️ NOZZLE CUTS</h2>
+<span class="count" id="cutCount">0 cuts</span>
+<span style="margin-left:auto;font-size:12px;color:var(--text-dim);">Tolerance: ±5°</span>
+</div>
+<div class="tbl-wrap">
+<table id="tblCuts">
+<thead><tr><th>Nozzle</th><th>Expected Angle</th><th>CNC Angle</th><th>Δ</th><th>Status</th></tr></thead>
+<tbody id="tbodyCuts"></tbody>
+</table>
+</div>
+
+<div class="section-header"><h2>🔵 SCRIBE FEATURES</h2><span class="count" id="scribeCount">0 scribes</span><span style="margin-left:auto;font-size:12px;color:var(--scribe);">Informational only</span></div>
 <div class="scribe-grid" id="scribeGrid"></div>
-<div class="section-header"><h2>📐 DEGREE LOCATIONS FROM PRINT</h2><span class="count" id="degreeCount">0 found</span></div>
-<div class="tbl-wrap"><table id="tblDegrees"><thead><tr><th>Print Angle</th><th>Expected RTP Angle (with offset)</th><th>Matching CNC Cut</th><th>Status</th></tr></thead><tbody id="tbodyDegrees"></tbody></table></div>
+
 <div class="section-header"><h2>📄 PDF TEXT EXTRACTED</h2></div>
 <div class="pdf-preview" id="pdfText"></div>
 </div>
@@ -129,219 +140,254 @@ td.dim { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// Known nozzle base angles (machine positions, independent of seam)
+// RTP offset is added at check time
+const NOZZLES = [
+  { name: 'N1', baseDeg: 0 },
+  { name: 'N2', baseDeg: 86.5 },   // 90° - 3.5° offset
+  { name: 'N3', baseDeg: 180 },
+  { name: 'N4', baseDeg: 0 },
+  { name: 'N5', baseDeg: 180 },
+  { name: 'N6', baseDeg: 0 },
+  { name: 'N7', baseDeg: 270 },
+  { name: 'N8', baseDeg: 180 },
+  { name: 'N9', baseDeg: 180 },
+];
+
 let pdfFile = null, cncFile = null;
 
 function wireDrop(zoneId, inputId, nameId, type) {
-const zone = document.getElementById(zoneId);
-const input = document.getElementById(inputId);
-const name = document.getElementById(nameId);
-input.addEventListener('change', () => { if (input.files[0]) setFile(input.files[0], type, zone, name); });
-zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0], type, zone, name); });
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  const name = document.getElementById(nameId);
+  input.addEventListener('change', () => { if (input.files[0]) setFile(input.files[0], type, zone, name); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0], type, zone, name); });
 }
 
 function setFile(file, type, zone, nameEl) {
-if (type === 'pdf') {
-pdfFile = file; zone.classList.add('loaded'); nameEl.textContent = '✓ ' + file.name;
-autoDetectSeam(file);
-} else {
-cncFile = file; zone.classList.add('loaded'); nameEl.textContent = '✓ ' + file.name;
-}
-updateBtn();
+  if (type === 'pdf') {
+    pdfFile = file; zone.classList.add('loaded'); nameEl.textContent = '✓ ' + file.name;
+    autoDetectSeam(file);
+  } else {
+    cncFile = file; zone.classList.add('loaded'); nameEl.textContent = '✓ ' + file.name;
+  }
+  updateBtn();
 }
 
-// Flexible seam angle regex — handles degree symbol variants and spaced-out letters from PDF extraction
+// Robust seam detection: tries multiple patterns, falls back to proximity search
 function findSeamAngle(text) {
-// Normalize: collapse whitespace inside potential "S E A M" sequences
-const norm = text.replace(/S\s+E\s+A\s+M/gi, 'SEAM');
-const patterns = [
-/(\d{1,3})\s*[°º°]\s*SEAM/i,
-/SEAM\s*[°º°]?\s*(\d{1,3})/i,
-/(\d{1,3})\s*DEG(?:REES?)?\s*SEAM/i,
-/SEAM\s*(\d{1,3})\s*DEG/i,
-/(\d{1,3})\s*[°º°]\s*W(?:ELD)?\s*SEAM/i,
-];
-for (const pat of patterns) {
-const m = norm.match(pat);
-if (m) return parseInt(m[1]);
-}
-return null;
+  const norm = text.replace(/S\s+E\s+A\s+M/gi, 'SEAM');
+  const DEG = '[°º°˚]';
+  const patterns = [
+    new RegExp('(\\d{1,3})\\s*' + DEG + '\\s*SEAM', 'i'),
+    new RegExp('SEAM\\s*' + DEG + '?\\s*(\\d{1,3})', 'i'),
+    new RegExp('(\\d{1,3})\\s*DEG(?:REES?)?\\s*SEAM', 'i'),
+    new RegExp('SEAM\\s*(\\d{1,3})\\s*DEG', 'i'),
+    new RegExp('(\\d{1,3})\\s*' + DEG + '\\s*W(?:ELD)?\\s*SEAM', 'i'),
+  ];
+  for (const pat of patterns) {
+    const m = norm.match(pat);
+    if (m) return parseInt(m[1]);
+  }
+  // Proximity fallback: find "SEAM" then grab nearest number within 40 chars
+  const si = norm.search(/SEAM/i);
+  if (si >= 0) {
+    const window = norm.substring(Math.max(0, si - 40), si + 40);
+    const nums = [...window.matchAll(/\b(\d{1,3})\b/g)];
+    for (const n of nums) {
+      const v = parseInt(n[1]);
+      if (v >= 0 && v <= 359) return v;
+    }
+  }
+  return null;
 }
 
 async function autoDetectSeam(file) {
-try {
-const buf = await file.arrayBuffer();
-const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-let fullText = '';
-for (let i = 1; i <= pdf.numPages; i++) {
-const page = await pdf.getPage(i);
-const tc = await page.getTextContent();
-fullText += tc.items.map(t => t.str).join(' ') + '\n';
-}
-const angle = findSeamAngle(fullText);
-if (angle !== null) document.getElementById('seamAngle').value = angle;
-} catch(e) { console.warn('Seam detect failed:', e); }
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      fullText += tc.items.map(t => t.str).join(' ') + '\n';
+    }
+    const angle = findSeamAngle(fullText);
+    if (angle !== null) document.getElementById('seamAngle').value = angle;
+  } catch(e) { console.warn('Seam detect failed:', e); }
 }
 
 function updateBtn() {
-const btn = document.getElementById('btnCheck');
-if (pdfFile && cncFile) { btn.disabled = false; btn.textContent = 'CHECK MY WORK'; }
-else { btn.disabled = true; btn.textContent = 'DROP BOTH FILES TO CHECK'; }
+  const btn = document.getElementById('btnCheck');
+  if (pdfFile && cncFile) { btn.disabled = false; btn.textContent = 'CHECK MY WORK'; }
+  else { btn.disabled = true; btn.textContent = 'DROP BOTH FILES TO CHECK'; }
 }
 
 wireDrop('dzPDF', 'filePDF', 'namePDF', 'pdf');
 wireDrop('dzCNC', 'fileCNC', 'nameCNC', 'cnc');
 
 function parseCNC(text) {
-const result = { pipeSize: null, features: [], programId: '' };
-const hdr = text.match(/\(CutPro Wizard - Load Material:\s*(.+?);([\d.]+)" x ([\d.]+)";([\d.]+)"\)/);
-if (hdr) {
-const circumference = parseFloat(hdr[3]);
-result.pipeSize = { length: parseFloat(hdr[2]), circumference, thickness: parseFloat(hdr[4]), od: circumference / Math.PI };
-}
-const seqMatch = text.match(/\(Seq \d+ - (.+?)\)/);
-if (seqMatch) result.programId = seqMatch[1].trim();
-const lines = text.split('\n').map(l => l.trim());
-let x = 0, y = 0, inFeature = false, fType = null, fStart = null;
-const circ = result.pipeSize ? result.pipeSize.circumference : 62.83185;
+  const result = { pipeSize: null, features: [], programId: '' };
+  const hdr = text.match(/\(CutPro Wizard - Load Material:\s*(.+?);([\d.]+)" x ([\d.]+)";([\d.]+)"\)/);
+  if (hdr) {
+    const circumference = parseFloat(hdr[3]);
+    result.pipeSize = { length: parseFloat(hdr[2]), circumference, thickness: parseFloat(hdr[4]), od: circumference / Math.PI };
+  }
+  const seqMatch = text.match(/\(Seq \d+ - (.+?)\)/);
+  if (seqMatch) result.programId = seqMatch[1].trim();
+  const lines = text.split('\n').map(l => l.trim());
+  let x = 0, y = 0, inFeature = false, fType = null, fStart = null;
+  const circ = result.pipeSize ? result.pipeSize.circumference : 62.83185;
+  for (const line of lines) {
+    // C-axis absolute positioning: snaps rotary to exact degree => set X (not increment)
+    const cAxisM = line.match(/^C([+-]?[\d.]+)\s*$/);
+    if (cAxisM) { x = (parseFloat(cAxisM[1]) / 360) * circ; continue; }
 
-for (const line of lines) {
-// --- C-axis absolute positioning (rotary axis snaps to exact degree) ---
-// C-axis degree * (circ / 360) = linear X position
-const cAxisM = line.match(/^C([+-]?[\d.]+)\s*$/);
-if (cAxisM) {
-const deg = parseFloat(cAxisM[1]);
-x = (deg / 360) * circ;  // absolute set, not incremental
-continue;
-}
+    const g01x = line.match(/^G01 X([+-]?[\d.]+)/);
+    const g01y = line.match(/^G01 Y([+-]?[\d.]+)/);
+    if (line.startsWith('G00 X')) x += parseFloat(line.match(/G00 X([+-]?[\d.]+)/)[1]);
+    else if (line.startsWith('G00 Y')) y += parseFloat(line.match(/G00 Y([+-]?[\d.]+)/)[1]);
+    else if (line.startsWith('G01 X') && g01x) x += parseFloat(g01x[1]);
+    else if (line.startsWith('G01 Y') && g01y) y += parseFloat(g01y[1]);
+    else if (/^G0[23]/.test(line)) {
+      const axm = line.match(/X([+-]?[\d.]+)/); const aym = line.match(/Y([+-]?[\d.]+)/);
+      if (axm) x += parseFloat(axm[1]); if (aym) y += parseFloat(aym[1]);
+    } else if (line.match(/^G01 X.*Y/)) {
+      const xm = line.match(/X([+-]?[\d.]+)/); const ym = line.match(/Y([+-]?[\d.]+)/);
+      if (xm) x += parseFloat(xm[1]); if (ym) y += parseFloat(ym[1]);
+    }
 
-const g01x = line.match(/^G01 X([+-]?[\d.]+)/);
-const g01y = line.match(/^G01 Y([+-]?[\d.]+)/);
-if (line.startsWith('G00 X')) x += parseFloat(line.match(/G00 X([+-]?[\d.]+)/)[1]);
-else if (line.startsWith('G00 Y')) y += parseFloat(line.match(/G00 Y([+-]?[\d.]+)/)[1]);
-else if (line.startsWith('G01 X') && g01x) x += parseFloat(g01x[1]);
-else if (line.startsWith('G01 Y') && g01y) y += parseFloat(g01y[1]);
-else if (/^G0[23]/.test(line)) {
-const axm = line.match(/X([+-]?[\d.]+)/); const aym = line.match(/Y([+-]?[\d.]+)/);
-if (axm) x += parseFloat(axm[1]); if (aym) y += parseFloat(aym[1]);
-} else if (line.match(/^G01 X.*Y/)) {
-const xm = line.match(/X([+-]?[\d.]+)/); const ym = line.match(/Y([+-]?[\d.]+)/);
-if (xm) x += parseFloat(xm[1]); if (ym) y += parseFloat(ym[1]);
-}
-
-if (line.startsWith('M09') && !inFeature) { inFeature = true; fType = 'SCRIBE'; fStart = { x, y }; }
-else if (line.startsWith('M07') && !inFeature) { inFeature = true; fType = 'CUT'; fStart = { x, y }; }
-// FIX: added M08 RF as valid end-of-feature marker
-else if ((line === 'M10' || line === 'M10 RT' || line === 'M08' || line === 'M08 RF') && inFeature) {
-if (fStart) { let deg = ((fStart.x / circ) * 360) % 360; if (deg < 0) deg += 360; result.features.push({ type: fType, x: fStart.x, y: fStart.y, deg }); }
-inFeature = false; fType = null; fStart = null;
-}
-}
-return result;
+    if (line.startsWith('M09') && !inFeature) { inFeature = true; fType = 'SCRIBE'; fStart = { x, y }; }
+    else if (line.startsWith('M07') && !inFeature) { inFeature = true; fType = 'CUT'; fStart = { x, y }; }
+    else if ((line === 'M10' || line === 'M10 RT' || line === 'M08' || line === 'M08 RF') && inFeature) {
+      if (fStart) {
+        let deg = ((fStart.x / circ) * 360) % 360;
+        if (deg < 0) deg += 360;
+        result.features.push({ type: fType, x: fStart.x, y: fStart.y, deg });
+      }
+      inFeature = false; fType = null; fStart = null;
+    }
+  }
+  return result;
 }
 
 async function parsePDF(file) {
-const buf = await file.arrayBuffer();
-const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-let fullText = '';
-for (let i = 1; i <= pdf.numPages; i++) {
-const page = await pdf.getPage(i);
-const tc = await page.getTextContent();
-fullText += tc.items.map(t => t.str).join(' ') + '\n';
-}
-const result = { od: null, seamAngle: null, degrees: [], rawText: fullText };
-const odM = fullText.match(/(\d+(?:\.\d+)?)["\s]*O\.?\s*D\.?/i);
-if (odM) result.od = parseFloat(odM[1]);
-result.seamAngle = findSeamAngle(fullText);
-const degPat = /\b(\d{1,3})[°º°]/g; let m; const seen = new Set();
-while ((m = degPat.exec(fullText)) !== null) {
-const v = parseInt(m[1]);
-if (v >= 0 && v <= 359 && !seen.has(v)) { seen.add(v); result.degrees.push(v); }
-}
-result.degrees.sort((a, b) => a - b);
-return result;
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    fullText += tc.items.map(t => t.str).join(' ') + '\n';
+  }
+  const result = { od: null, seamAngle: null, rawText: fullText };
+  const odM = fullText.match(/(\d+(?:\.\d+)?)["\s]*O\.?\s*D\.?/i);
+  if (odM) result.od = parseFloat(odM[1]);
+  result.seamAngle = findSeamAngle(fullText);
+  return result;
 }
 
 document.getElementById('btnCheck').addEventListener('click', async () => {
-document.getElementById('loading').style.display = 'block';
-document.getElementById('results').style.display = 'none';
-const seamAngle = parseInt(document.getElementById('seamAngle').value) || 0;
-const rtpOffset = (360 - seamAngle) % 360;
-try {
-const [cncText, pdfData] = await Promise.all([cncFile.text(), parsePDF(pdfFile)]);
-const cncData = parseCNC(cncText);
-const cncOD = cncData.pipeSize ? Math.round(cncData.pipeSize.od * 10) / 10 : null;
-const printOD = pdfData.od;
-const sizePass = cncOD !== null && printOD !== null && Math.abs(cncOD - printOD) < 0.1;
-document.getElementById('cPrintOD').textContent = printOD !== null ? printOD + '"' : 'Not found';
-document.getElementById('cCNCOD').textContent = cncOD !== null ? cncOD + '"' : 'Not found';
-document.getElementById('cSizeCheck').textContent = sizePass ? '✓ MATCH' : '✗ MISMATCH';
-const sizeBadge = document.getElementById('cSizeBadge');
-sizeBadge.textContent = sizePass ? 'PASS' : 'FAIL';
-sizeBadge.className = 'card-badge ' + (sizePass ? 'badge-pass' : 'badge-fail');
-document.getElementById('cSizeSub').textContent = cncData.pipeSize ? `Circ: ${cncData.pipeSize.circumference.toFixed(3)}", Wall: ${cncData.pipeSize.thickness}"` : '';
-document.getElementById('cSeam').textContent = seamAngle + '°';
-document.getElementById('cOffset').textContent = '+' + rtpOffset + '°';
-document.getElementById('cProgram').textContent = cncData.programId || 'Unknown';
-const cuts = cncData.features.filter(f => f.type === 'CUT');
-const scribes = cncData.features.filter(f => f.type === 'SCRIBE');
-document.getElementById('cutCount').textContent = cuts.length + ' cuts';
-document.getElementById('scribeCount').textContent = scribes.length + ' scribes';
-const tbodyCuts = document.getElementById('tbodyCuts');
-tbodyCuts.innerHTML = '';
-let anyFail = false;
-cuts.forEach((cut, i) => {
-let printAngle = (cut.deg - rtpOffset + 360) % 360;
-let closest = null, minDelta = 999;
-for (const pd of pdfData.degrees) {
-const delta = Math.min(Math.abs(pd - printAngle), 360 - Math.abs(pd - printAngle));
-if (delta < minDelta) { minDelta = delta; closest = pd; }
-}
-const status = minDelta <= 5 ? 'MATCH' : minDelta <= 15 ? 'WARN' : 'REVIEW';
-if (status !== 'MATCH') anyFail = true;
-const tr = document.createElement('tr');
-tr.innerHTML = `<td>${i+1}</td><td class="dim">${cut.y.toFixed(3)}"</td><td class="dim">${cut.deg.toFixed(1)}°</td><td class="dim">${printAngle.toFixed(1)}°</td><td class="dim">${closest !== null ? closest+'°' : '—'}</td><td class="dim ${status==='MATCH'?'pass':status==='WARN'?'warn':'fail'}">${minDelta.toFixed(1)}°</td><td class="${status==='MATCH'?'pass':status==='WARN'?'warn':'fail'}">${status}</td>`;
-tbodyCuts.appendChild(tr);
-});
-const scribeGrid = document.getElementById('scribeGrid');
-scribeGrid.innerHTML = '';
-const seenS = new Set();
-scribes.forEach(s => {
-const key = Math.round(s.deg / 5) * 5;
-if (!seenS.has(key)) {
-seenS.add(key);
-let pa = (s.deg - rtpOffset + 360) % 360;
-const chip = document.createElement('div');
-chip.className = 'scribe-chip';
-chip.innerHTML = `<div class="sc-label">SCRIBE</div><div class="sc-val">Y: ${s.y.toFixed(2)}"</div><div class="sc-val">${s.deg.toFixed(1)}° RTP → ${pa.toFixed(1)}° print</div>`;
-scribeGrid.appendChild(chip);
-}
-});
-const tbodyDeg = document.getElementById('tbodyDegrees');
-tbodyDeg.innerHTML = '';
-document.getElementById('degreeCount').textContent = pdfData.degrees.length + ' found';
-pdfData.degrees.forEach(pd => {
-const expectedRTP = (pd + rtpOffset) % 360;
-let closestCut = null, minD = 999;
-cuts.forEach(c => { const d = Math.min(Math.abs(c.deg - expectedRTP), 360 - Math.abs(c.deg - expectedRTP)); if (d < minD) { minD = d; closestCut = c; } });
-const status = closestCut && minD <= 5 ? 'FOUND' : closestCut && minD <= 20 ? 'CLOSE' : 'NOT FOUND';
-const tr = document.createElement('tr');
-tr.innerHTML = `<td class="dim">${pd}°</td><td class="dim">${expectedRTP.toFixed(1)}°</td><td class="dim">${closestCut ? closestCut.deg.toFixed(1)+'° (Δ'+minD.toFixed(1)+'°)' : '—'}</td><td class="${status==='FOUND'?'pass':status==='CLOSE'?'warn':'fail'}">${status}</td>`;
-tbodyDeg.appendChild(tr);
-});
-document.getElementById('pdfText').textContent = pdfData.rawText;
-const banner = document.getElementById('statusBanner');
-if (!sizePass) { banner.textContent = '⛔ PIPE SIZE MISMATCH — DO NOT RUN PROGRAM'; banner.className = 'status-banner fail'; }
-else if (anyFail) { banner.textContent = '⚠️ REVIEW REQUIRED — SOME NOZZLE LOCATIONS NEED ATTENTION'; banner.className = 'status-banner warn'; }
-else { banner.textContent = '✅ LOOKING GOOD — PIPE SIZE AND LOCATIONS CONSISTENT'; banner.className = 'status-banner pass'; }
-document.getElementById('loading').style.display = 'none';
-document.getElementById('results').style.display = 'block';
-} catch(err) {
-document.getElementById('loading').style.display = 'none';
-alert('Error analyzing files: ' + err.message);
-console.error(err);
-}
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  const seamAngle = parseInt(document.getElementById('seamAngle').value) || 0;
+  const rtpOffset = (360 - seamAngle) % 360;
+  const seamDetected = document.getElementById('seamAngle').value !== '';
+
+  try {
+    const [cncText, pdfData] = await Promise.all([cncFile.text(), parsePDF(pdfFile)]);
+    const cncData = parseCNC(cncText);
+
+    // Pipe size
+    const cncOD = cncData.pipeSize ? Math.round(cncData.pipeSize.od * 10) / 10 : null;
+    const printOD = pdfData.od;
+    const sizePass = cncOD !== null && printOD !== null && Math.abs(cncOD - printOD) < 0.1;
+    document.getElementById('cPrintOD').textContent = printOD !== null ? printOD + '"' : 'Not found';
+    document.getElementById('cCNCOD').textContent = cncOD !== null ? cncOD + '"' : 'Not found';
+    document.getElementById('cSizeCheck').textContent = sizePass ? '✓ MATCH' : '✗ MISMATCH';
+    const sizeBadge = document.getElementById('cSizeBadge');
+    sizeBadge.textContent = sizePass ? 'PASS' : 'FAIL';
+    sizeBadge.className = 'card-badge ' + (sizePass ? 'badge-pass' : 'badge-fail');
+    document.getElementById('cSizeSub').textContent = cncData.pipeSize ? `Circ: ${cncData.pipeSize.circumference.toFixed(3)}", Wall: ${cncData.pipeSize.thickness}"` : '';
+
+    // Seam
+    document.getElementById('cSeam').textContent = seamDetected ? seamAngle + '°' : '0° (not detected)';
+    document.getElementById('cOffset').textContent = '+' + rtpOffset + '°';
+    document.getElementById('cProgram').textContent = cncData.programId || 'Unknown';
+    document.getElementById('seamWarn').style.display = seamDetected ? 'none' : 'block';
+
+    // Cuts vs nozzles
+    const cuts = cncData.features.filter(f => f.type === 'CUT');
+    const scribes = cncData.features.filter(f => f.type === 'SCRIBE');
+    document.getElementById('cutCount').textContent = cuts.length + ' cuts';
+    document.getElementById('scribeCount').textContent = scribes.length + ' scribes';
+
+    const tbodyCuts = document.getElementById('tbodyCuts');
+    tbodyCuts.innerHTML = '';
+    let anyFail = false;
+
+    cuts.forEach((cut, i) => {
+      const nozzle = NOZZLES[i] || { name: 'N' + (i + 1), baseDeg: null };
+      let statusClass = 'fail', statusText = 'REVIEW', deltaStr = '—', expectedStr = '—';
+
+      if (nozzle.baseDeg !== null) {
+        const expectedRTP = (nozzle.baseDeg + rtpOffset) % 360;
+        const delta = Math.min(Math.abs(cut.deg - expectedRTP), 360 - Math.abs(cut.deg - expectedRTP));
+        deltaStr = delta.toFixed(1) + '°';
+        expectedStr = expectedRTP.toFixed(1) + '°';
+        if (delta <= 5) { statusClass = 'pass'; statusText = 'MATCH'; }
+        else if (delta <= 15) { statusClass = 'warn'; statusText = 'WARN'; }
+        else { anyFail = true; }
+      } else {
+        anyFail = true;
+      }
+      if (statusText !== 'MATCH') anyFail = true;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><span class="nozzle-label">${nozzle.name}</span></td><td class="mono">${expectedStr}</td><td class="mono">${cut.deg.toFixed(1)}°</td><td class="mono ${statusClass}">${deltaStr}</td><td class="${statusClass}">${statusText}</td>`;
+      tbodyCuts.appendChild(tr);
+    });
+
+    // Scribes
+    const scribeGrid = document.getElementById('scribeGrid');
+    scribeGrid.innerHTML = '';
+    const seenS = new Set();
+    scribes.forEach(s => {
+      const key = Math.round(s.deg / 5) * 5;
+      if (!seenS.has(key)) {
+        seenS.add(key);
+        const chip = document.createElement('div');
+        chip.className = 'scribe-chip';
+        chip.innerHTML = `<div class="sc-label">SCRIBE</div><div class="sc-val">Y: ${s.y.toFixed(2)}"</div><div class="sc-val">${s.deg.toFixed(1)}° RTP</div>`;
+        scribeGrid.appendChild(chip);
+      }
+    });
+
+    document.getElementById('pdfText').textContent = pdfData.rawText;
+
+    // Banner
+    const banner = document.getElementById('statusBanner');
+    if (!sizePass) {
+      banner.textContent = '⛔ PIPE SIZE MISMATCH — DO NOT RUN PROGRAM';
+      banner.className = 'status-banner fail';
+    } else if (anyFail) {
+      banner.textContent = '⚠️ REVIEW REQUIRED — SOME NOZZLE LOCATIONS NEED ATTENTION';
+      banner.className = 'status-banner warn';
+    } else {
+      banner.textContent = '✅ LOOKING GOOD — ALL NOZZLE LOCATIONS CONSISTENT';
+      banner.className = 'status-banner pass';
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+  } catch(err) {
+    document.getElementById('loading').style.display = 'none';
+    alert('Error analyzing files: ' + err.message);
+    console.error(err);
+  }
 });
 </script>
 </body>
