@@ -67,7 +67,8 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 .scribe-chip .sc-label { color: var(--scribe); font-weight: 700; font-size: 11px; }
 .scribe-chip .sc-val { color: var(--text); margin-top: 2px; }
 .pdf-preview { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 24px; max-height: 180px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--text-dim); line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
-.seam-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 16px; }
+.seam-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.seam-left { display: flex; flex-direction: column; gap: 8px; }
 .seam-label { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .seam-hint { font-size: 11px; font-weight: 400; color: var(--text-dim); margin-left: 6px; }
 .seam-input-wrap { display: flex; align-items: center; gap: 6px; }
@@ -75,6 +76,12 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 .seam-input-wrap input:focus { border-color: var(--accent); }
 .seam-input-wrap input::placeholder { color: var(--text-dim); font-size: 14px; font-weight: 400; }
 .seam-deg { font-size: 20px; font-weight: 700; color: var(--text-dim); }
+.vessel-toggle { display: flex; flex-direction: column; gap: 6px; margin-left: auto; }
+.vessel-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; }
+.toggle-btns { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.tog-btn { background: var(--surface2); color: var(--text-dim); border: none; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
+.tog-btn:first-child { border-right: 1px solid var(--border); }
+.tog-btn.active { background: var(--accent); color: #fff; }
 .seam-warn { background: rgba(210,153,34,.1); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 16px; font-size: 13px; color: var(--yellow); display: none; }
 #loading { display: none; text-align: center; padding: 40px; color: var(--text-dim); font-size: 15px; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 16px; }
@@ -87,7 +94,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v1.4 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v1.5 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -108,10 +115,19 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 
 <div class="seam-row">
+<div class="seam-left">
 <label class="seam-label" for="seamAngle">Seam Angle <span class="seam-hint">(auto-detected from print — type to override)</span></label>
 <div class="seam-input-wrap">
 <input type="number" id="seamAngle" min="0" max="359" placeholder="e.g. 315" />
 <span class="seam-deg">°</span>
+</div>
+</div>
+<div class="vessel-toggle">
+<span class="vessel-label">Vessel Orientation</span>
+<div class="toggle-btns">
+<button class="tog-btn active" id="togHoriz" onclick="setOrientation('H')">Horizontal</button>
+<button class="tog-btn" id="togVert" onclick="setOrientation('V')">Vertical</button>
+</div>
 </div>
 </div>
 <button id="btnCheck" disabled>DROP BOTH FILES TO CHECK</button>
@@ -128,7 +144,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 <div class="cards">
 <div class="card"><div class="card-title">Seam Angle</div><div class="card-value" id="cSeam">—</div><div class="card-sub" id="cSeamSub">Auto-detected from print</div></div>
-<div class="card"><div class="card-title">RTP Offset Applied</div><div class="card-value" id="cOffset">—</div><div class="card-sub">Degrees added to nozzle locations</div></div>
+<div class="card"><div class="card-title">Vessel / Formula</div><div class="card-value" id="cOffset">—</div><div class="card-sub" id="cOffsetSub">RTP angle formula</div></div>
 <div class="card"><div class="card-title">CNC Program</div><div class="card-value" id="cProgram">—</div><div class="card-sub" id="cProgramSub">From sequence comment</div></div>
 </div>
 
@@ -169,7 +185,13 @@ const NOZZLES = [
   { name: 'N9', baseDeg: 180 },
 ];
 
-let pdfFile = null, cncFile = null;
+let pdfFile = null, cncFile = null, vesselOrientation = 'H';
+
+function setOrientation(v) {
+  vesselOrientation = v;
+  document.getElementById('togHoriz').classList.toggle('active', v === 'H');
+  document.getElementById('togVert').classList.toggle('active', v === 'V');
+}
 
 function wireDrop(zoneId, inputId, nameId, type) {
   const zone = document.getElementById(zoneId);
@@ -314,8 +336,15 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
   document.getElementById('results').style.display = 'none';
   const seamInput = document.getElementById('seamAngle');
   const seamAngle = parseInt(seamInput.value) || 0;
-  const rtpOffset = (360 - seamAngle) % 360;
+  const isVertical = vesselOrientation === 'V';
+  // Match Excel formula exactly:
+  // Horizontal: RTP = (360 - seam + printAngle) % 360
+  // Vertical:   RTP = (seam - printAngle + 360) % 360
   const seamDetected = seamInput.value.trim() !== '';
+  function printToRTP(printDeg) {
+    if (isVertical) return (seamAngle - printDeg + 360) % 360;
+    return (360 - seamAngle + printDeg) % 360;
+  }
 
   try {
     const [cncText, pdfData] = await Promise.all([cncFile.text(), parsePDF(pdfFile)]);
@@ -336,7 +365,11 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     // Seam
     document.getElementById('cSeam').textContent = seamAngle + '°';
     document.getElementById('cSeamSub').textContent = seamDetected ? (seamInput.title === 'Auto-detected from print' ? 'Auto-detected from print' : 'Manually entered') : 'Not detected — defaulting to 0°';
-    document.getElementById('cOffset').textContent = '+' + rtpOffset + '°';
+    const exampleRTP = printToRTP(0);
+    document.getElementById('cOffset').textContent = isVertical ? 'Vertical' : 'Horizontal';
+    document.getElementById('cOffsetSub').textContent = isVertical
+      ? `RTP = (${seamAngle}° − print angle) % 360`
+      : `RTP = (360 − ${seamAngle}° + print angle) % 360`;
     document.getElementById('cProgram').textContent = cncData.programId || 'Unknown';
     document.getElementById('seamWarn').style.display = seamDetected ? 'none' : 'block';
 
@@ -355,7 +388,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
       let statusClass = 'fail', statusText = 'REVIEW', deltaStr = '—', expectedStr = '—';
 
       if (nozzle.baseDeg !== null) {
-        const expectedRTP = (nozzle.baseDeg + rtpOffset) % 360;
+        const expectedRTP = printToRTP(nozzle.baseDeg);
         const delta = Math.min(Math.abs(cut.deg - expectedRTP), 360 - Math.abs(cut.deg - expectedRTP));
         deltaStr = delta.toFixed(1) + '°';
         expectedStr = expectedRTP.toFixed(1) + '°';
