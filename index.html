@@ -94,7 +94,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v1.5 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v1.6 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -175,7 +175,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // RTP offset is added at check time
 const NOZZLES = [
   { name: 'N1', baseDeg: 0 },
-  { name: 'N2', baseDeg: 86.5 },   // 90° - 3.5° offset
+  { name: 'N2', baseDeg: 90 },      // print angle 90° → RTP 135° (with seam 315°)
   { name: 'N3', baseDeg: 180 },
   { name: 'N4', baseDeg: 0 },
   { name: 'N5', baseDeg: 180 },
