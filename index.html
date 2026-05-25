@@ -102,7 +102,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v2.2 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v2.3 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -201,15 +201,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // RTP machine reference is fixed; seam angle (from PDF) drives the offset formula.
 // Vessel: 20" OD horiz, seam 315°. RTP = (360 − seam + printDeg) % 360
 const NOZZLES = [
-  { name: 'N1', baseDeg: 0 },    // Suction Outlet — print 0° → RTP 45°
-  { name: 'N2', baseDeg: 90 },   // Coil Return — print 90° → RTP 135° (3.5" tang. offset)
-  { name: 'N3', baseDeg: 180 },  // Coil Feed — print 180° → RTP 225° (from drawing 135°/225°)
-  { name: 'N4', baseDeg: 180 },  // Top Level Column — print 180°
-  { name: 'N5', baseDeg: 180 },  // Btm Level Column — print 180°
-  { name: 'N6', baseDeg: 0 },    // Relief — print 0° (FLUSH at top)
-  { name: 'N7', baseDeg: 135 },  // Liquid Make-Up — print 135° (from drawing iso view)
-  { name: 'N8', baseDeg: 180 },  // Equalizer — print 180° → RTP 225°
-  { name: 'N9', baseDeg: 180 },  // Oil Pot Relief — print 180° → RTP 225°
+  { name: 'N1', baseDeg: 0 },    // Suction Outlet   — print 0°   → RTP 45°
+  { name: 'N2', baseDeg: 90 },   // Coil Return      — print 90°  → RTP 135° (3.5" tang. offset)
+  { name: 'N3', baseDeg: 180 },  // Coil Feed        — print 180° → RTP 225°
+  { name: 'N4', baseDeg: 0 },    // Top Level Column — print 0°   → RTP 45°
+  { name: 'N5', baseDeg: 180 },  // Btm Level Column — print 180° → RTP 225°
+  { name: 'N6', baseDeg: 180 },  // Relief           — print 180° → RTP 225°
+  { name: 'N7', baseDeg: 270 },  // Liquid Make-Up   — print 270° → RTP 315°
+  { name: 'N8', baseDeg: 180 },  // Equalizer        — print 180° → RTP 225°
+  { name: 'N9', baseDeg: 180 },  // Oil Pot Relief   — print 180° → RTP 225°
 ];
 
 let pdfFile = null, cncFile = null, vesselOrientation = 'H';
