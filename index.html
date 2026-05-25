@@ -102,7 +102,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v1.9 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v2.0 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -163,7 +163,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 <div class="tbl-wrap">
 <table id="tblCuts">
-<thead><tr><th>Nozzle</th><th>Expected Angle</th><th>CNC Angle</th><th>Y Position</th><th>Δ</th><th>Status</th></tr></thead>
+<thead><tr><th>Nozzle</th><th>Expected Angle</th><th>CNC Angle</th><th>Axial X</th><th>Δ</th><th>Status</th></tr></thead>
 <tbody id="tbodyCuts"></tbody>
 </table>
 </div>
@@ -175,7 +175,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 <div class="tbl-wrap" id="endCutWrap" style="display:none;">
 <table>
-<thead><tr><th>Type</th><th>CNC Angle</th><th>Y Position</th><th>Note</th></tr></thead>
+<thead><tr><th>Type</th><th>CNC Angle</th><th>Axial X</th><th>Note</th></tr></thead>
 <tbody id="tbodyEndCuts"></tbody>
 </table>
 </div>
@@ -197,18 +197,19 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// Known nozzle print angles (angles as shown on the certified drawing)
-// printToRTP() converts these to machine RTP angles based on seam and orientation
+// Known nozzle print angles (as shown on the certified drawing, 26p206138)
+// RTP machine reference is fixed; seam angle (from PDF) drives the offset formula.
+// Vessel: 20" OD horiz, seam 315°. RTP = (360 − seam + printDeg) % 360
 const NOZZLES = [
-  { name: 'N1', baseDeg: 0 },
-  { name: 'N2', baseDeg: 90 },   // confirmed: print 90° → RTP 135° with seam 315° horiz
-  { name: 'N3', baseDeg: 180 },
-  { name: 'N4', baseDeg: 0 },
-  { name: 'N5', baseDeg: 180 },
-  { name: 'N6', baseDeg: 0 },
-  { name: 'N7', baseDeg: 270 },
-  { name: 'N8', baseDeg: 180 },
-  { name: 'N9', baseDeg: 180 },
+  { name: 'N1', baseDeg: 0 },    // Suction Outlet — print 0° → RTP 45°
+  { name: 'N2', baseDeg: 90 },   // Coil Return — print 90° → RTP 135° (3.5" tang. offset)
+  { name: 'N3', baseDeg: 135 },  // Coil Feed — print 135° → RTP 180° (from drawing 135°/225°)
+  { name: 'N4', baseDeg: 180 },  // Top Level Column — print 180°
+  { name: 'N5', baseDeg: 180 },  // Btm Level Column — print 180°
+  { name: 'N6', baseDeg: 0 },    // Relief — print 0° (FLUSH at top)
+  { name: 'N7', baseDeg: 135 },  // Liquid Make-Up — print 135° (from drawing iso view)
+  { name: 'N8', baseDeg: 270 },  // Equalizer — print 270° (from drawing "270° FLUSH")
+  { name: 'N9', baseDeg: 270 },  // Oil Pot Relief — print 270° (from drawing "270° FLUSH")
 ];
 
 let pdfFile = null, cncFile = null, vesselOrientation = 'H';
@@ -348,9 +349,10 @@ wireDrop('dzPDF', 'filePDF', 'namePDF', 'pdf');
 wireDrop('dzCNC', 'fileCNC', 'nameCNC', 'cnc');
 
 // ─── CNC PARSER ──────────────────────────────────────────────────────────────
-// Uses G90 absolute positioning by default (standard G-code convention).
-// Tracks G90/G91 mode switches. X axis = belt/rotary position (converted to
-// degrees via circumference). Y axis = linear position along pipe length.
+// Rotary Tube Pro axis convention:
+//   Y axis = belt/rotary position (circumferential). Converted to degrees via circ.
+//   X axis = linear position along pipe length (axial).
+//   C-axis command (e.g. C270) = absolute rotation in degrees → sets Y belt position.
 function parseCNC(text) {
   const result = { pipeSize: null, features: [], programId: '', debugLines: [] };
 
@@ -385,11 +387,11 @@ function parseCNC(text) {
     if (line === 'G90') { absMode = true; continue; }
     if (line === 'G91') { absMode = false; continue; }
 
-    // C-axis: always absolute rotary — convert degrees to belt-length position
+    // C-axis: absolute rotation in degrees → sets Y (belt/rotation axis)
     const cAxisM = line.match(/^C([+-]?[\d.]+)\s*(?:;.*)?$/);
     if (cAxisM) {
-      x = (parseFloat(cAxisM[1]) / 360) * circ;
-      result.debugLines.push(`C-axis → ${parseFloat(cAxisM[1]).toFixed(1)}° → X=${x.toFixed(3)}"`);
+      y = (parseFloat(cAxisM[1]) / 360) * circ;
+      result.debugLines.push(`C-axis → ${parseFloat(cAxisM[1]).toFixed(1)}° → Y=${y.toFixed(3)}"`);
       continue;
     }
 
@@ -423,12 +425,13 @@ function parseCNC(text) {
 
     if ((line === 'M10' || line === 'M10 RT' || line === 'M08' || line === 'M08 RF') && inFeature) {
       if (fStart) {
-        let deg = ((fStart.x / circ) * 360) % 360;
+        // Y = belt/rotation → angle. X = axial position.
+        let deg = ((fStart.y / circ) * 360) % 360;
         if (deg < 0) deg += 360;
         featureCount++;
         result.features.push({ type: fType, x: fStart.x, y: fStart.y, deg, id: featureCount });
         result.debugLines.push(
-          `${fType} #${featureCount}: X=${fStart.x.toFixed(3)}" → ${deg.toFixed(1)}°, Y=${fStart.y.toFixed(3)}"`
+          `${fType} #${featureCount}: Y=${fStart.y.toFixed(3)}" → ${deg.toFixed(1)}°, X=${fStart.x.toFixed(3)}" (axial)`
         );
       }
       inFeature = false; fType = null; fStart = null;
@@ -514,8 +517,8 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     let cuts = allCuts;
 
     if (allCuts.length > NOZZLES.length) {
-      // More cuts than expected nozzles — strip end cuts from Y extremes
-      const sorted = [...allCuts].sort((a, b) => a.y - b.y);
+      // More cuts than expected nozzles — strip end cuts from X (axial) extremes
+      const sorted = [...allCuts].sort((a, b) => a.x - b.x);
       const leftEnd = sorted[0];
       const rightEnd = sorted[sorted.length - 1];
       // Only strip if left and right are clearly different positions
@@ -557,7 +560,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
         <td><span class="nozzle-label">${nozzle.name}</span></td>
         <td class="mono">${expectedStr}</td>
         <td class="mono">${cut.deg.toFixed(1)}°</td>
-        <td class="mono">${cut.y.toFixed(2)}"</td>
+        <td class="mono">${cut.x.toFixed(2)}"</td>
         <td class="mono ${statusClass}">${deltaStr}</td>
         <td class="${statusClass}">${statusText}</td>`;
       tbodyCuts.appendChild(tr);
@@ -580,7 +583,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
         tr.innerHTML = `
           <td class="endcut">END CUT</td>
           <td class="mono">${cut.deg.toFixed(1)}°</td>
-          <td class="mono">${cut.y.toFixed(2)}"</td>
+          <td class="mono">${cut.x.toFixed(2)}"</td>
           <td style="color:var(--text-dim)">${side}</td>`;
         tbodyEndCuts.appendChild(tr);
       });
@@ -600,7 +603,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
         seenS.add(key);
         const chip = document.createElement('div');
         chip.className = 'scribe-chip';
-        chip.innerHTML = `<div class="sc-label">SCRIBE</div><div class="sc-val">Y: ${s.y.toFixed(2)}"</div><div class="sc-val">${s.deg.toFixed(1)}° RTP</div>`;
+        chip.innerHTML = `<div class="sc-label">SCRIBE</div><div class="sc-val">X: ${s.x.toFixed(2)}"</div><div class="sc-val">${s.deg.toFixed(1)}° RTP</div>`;
         scribeGrid.appendChild(chip);
       }
     });
@@ -608,7 +611,7 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
     // ── Debug panel ──
     const debugPanel = document.getElementById('debugPanel');
     const modeNote = `Mode: G90 absolute (default)\nCircumference used: ${(cncData.pipeSize ? cncData.pipeSize.circumference : 62.83185).toFixed(4)}"`;
-    const allCutsSummary = allCuts.map(c => `  CUT id=${c.id}: ${c.deg.toFixed(1)}° @ Y=${c.y.toFixed(2)}" ${endCuts.includes(c) ? '← END CUT' : ''}`).join('\n');
+    const allCutsSummary = allCuts.map(c => `  CUT id=${c.id}: ${c.deg.toFixed(1)}° @ axial X=${c.x.toFixed(2)}" ${endCuts.includes(c) ? '← END CUT' : ''}`).join('\n');
     debugPanel.textContent = [
       modeNote,
       '',
