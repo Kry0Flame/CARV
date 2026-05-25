@@ -102,7 +102,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v2.1 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v2.2 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -163,7 +163,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 </div>
 <div class="tbl-wrap">
 <table id="tblCuts">
-<thead><tr><th>Nozzle</th><th>Expected Angle</th><th>CNC Angle</th><th>Axial X</th><th>Δ</th><th>Status</th></tr></thead>
+<thead><tr><th>Nozzle</th><th>Print Angle</th><th>Excel Angle</th><th>CNC Angle</th><th>Axial X</th><th>Status</th></tr></thead>
 <tbody id="tbodyCuts"></tbody>
 </table>
 </div>
@@ -203,13 +203,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const NOZZLES = [
   { name: 'N1', baseDeg: 0 },    // Suction Outlet — print 0° → RTP 45°
   { name: 'N2', baseDeg: 90 },   // Coil Return — print 90° → RTP 135° (3.5" tang. offset)
-  { name: 'N3', baseDeg: 135 },  // Coil Feed — print 135° → RTP 180° (from drawing 135°/225°)
+  { name: 'N3', baseDeg: 180 },  // Coil Feed — print 180° → RTP 225° (from drawing 135°/225°)
   { name: 'N4', baseDeg: 180 },  // Top Level Column — print 180°
   { name: 'N5', baseDeg: 180 },  // Btm Level Column — print 180°
   { name: 'N6', baseDeg: 0 },    // Relief — print 0° (FLUSH at top)
   { name: 'N7', baseDeg: 135 },  // Liquid Make-Up — print 135° (from drawing iso view)
-  { name: 'N8', baseDeg: 270 },  // Equalizer — print 270° (from drawing "270° FLUSH")
-  { name: 'N9', baseDeg: 270 },  // Oil Pot Relief — print 270° (from drawing "270° FLUSH")
+  { name: 'N8', baseDeg: 180 },  // Equalizer — print 180° → RTP 225°
+  { name: 'N9', baseDeg: 180 },  // Oil Pot Relief — print 180° → RTP 225°
 ];
 
 let pdfFile = null, cncFile = null, vesselOrientation = 'H';
@@ -569,10 +569,10 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><span class="nozzle-label">${nozzle.name}</span></td>
+        <td class="mono">${nozzle.baseDeg}°</td>
         <td class="mono">${expectedStr}</td>
         <td class="mono">${bestCut ? bestCut.deg.toFixed(1) + '°' : '—'}</td>
         <td class="mono">${bestCut ? bestCut.x.toFixed(2) + '"' : '—'}</td>
-        <td class="mono ${statusClass}">${deltaStr}</td>
         <td class="${statusClass}">${statusText}</td>`;
       tbodyCuts.appendChild(tr);
     });
