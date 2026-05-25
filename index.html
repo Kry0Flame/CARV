@@ -102,7 +102,7 @@ td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 <body>
 <header>
 <div class="logo">CARV <span>Cut Accuracy Review and Verification</span></div>
-<div class="version">v2.0 · Rotary Tube Pro · RVS Corp</div>
+<div class="version">v2.1 · Rotary Tube Pro · RVS Corp</div>
 </header>
 <main>
 <div class="drop-row">
@@ -531,26 +531,37 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
 
     document.getElementById('cutCount').textContent = cuts.length + ' nozzle cut' + (cuts.length !== 1 ? 's' : '');
 
-    // ── Nozzle cuts table ──
+    // ── Nozzle cuts table — angle-based matching ──
+    // Each nozzle's expected RTP angle is computed from its print angle + seam formula.
+    // We find the CNC cut closest in angle to each nozzle's expected RTP.
+    // Multiple nozzles can share the same cut (e.g. N4 & N5 both at 225°, N1 & N6 both at 45°).
+    function angularDist(a, b) {
+      const d = Math.abs(a - b) % 360;
+      return d > 180 ? 360 - d : d;
+    }
+
     const tbodyCuts = document.getElementById('tbodyCuts');
     tbodyCuts.innerHTML = '';
     let anyFail = false;
 
-    cuts.forEach((cut, i) => {
-      const nozzle = NOZZLES[i] || { name: 'N' + (i + 1), baseDeg: null };
-      let statusClass = 'fail', statusText = 'REVIEW', deltaStr = '—', expectedStr = '—';
+    NOZZLES.forEach(nozzle => {
+      const expectedRTP = printToRTP(nozzle.baseDeg);
 
-      if (nozzle.baseDeg !== null) {
-        const expectedRTP = printToRTP(nozzle.baseDeg);
-        const delta = Math.min(
-          Math.abs(cut.deg - expectedRTP),
-          360 - Math.abs(cut.deg - expectedRTP)
-        );
-        deltaStr = delta.toFixed(1) + '°';
+      // Find closest CNC cut by angular distance (all cuts eligible — no greedy exclusion,
+      // since same-angle nozzles like N4/N5 legitimately share the same cut location)
+      let bestCut = null, bestDelta = Infinity;
+      cuts.forEach(cut => {
+        const d = angularDist(cut.deg, expectedRTP);
+        if (d < bestDelta) { bestDelta = d; bestCut = cut; }
+      });
+
+      let statusClass = 'fail', statusText = 'REVIEW', deltaStr = '—', expectedStr = '—';
+      if (bestCut !== null) {
+        deltaStr = bestDelta.toFixed(1) + '°';
         expectedStr = expectedRTP.toFixed(1) + '°';
-        if (delta <= 5) { statusClass = 'pass'; statusText = 'MATCH'; }
-        else if (delta <= 15) { statusClass = 'warn'; statusText = 'WARN'; anyFail = true; }
-        else { anyFail = true; }
+        if (bestDelta <= 5)       { statusClass = 'pass'; statusText = 'MATCH'; }
+        else if (bestDelta <= 15) { statusClass = 'warn'; statusText = 'WARN';  anyFail = true; }
+        else                      { anyFail = true; }
       } else {
         anyFail = true;
       }
@@ -559,8 +570,8 @@ document.getElementById('btnCheck').addEventListener('click', async () => {
       tr.innerHTML = `
         <td><span class="nozzle-label">${nozzle.name}</span></td>
         <td class="mono">${expectedStr}</td>
-        <td class="mono">${cut.deg.toFixed(1)}°</td>
-        <td class="mono">${cut.x.toFixed(2)}"</td>
+        <td class="mono">${bestCut ? bestCut.deg.toFixed(1) + '°' : '—'}</td>
+        <td class="mono">${bestCut ? bestCut.x.toFixed(2) + '"' : '—'}</td>
         <td class="mono ${statusClass}">${deltaStr}</td>
         <td class="${statusClass}">${statusText}</td>`;
       tbodyCuts.appendChild(tr);
