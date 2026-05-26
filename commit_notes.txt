@@ -1,0 +1,67 @@
+refactor: restructure to modular ES modules + dynamic nozzle extraction
+
+RESTRUCTURE — monolithic index.html split into modular architecture
+-----------------------------------------------------------------------
+- Extracted all CSS into styles.css; added toast notification styles
+- Converted <script> to <script type="module"> — no build step required,
+  works as-is on GitHub Pages
+- Added .nojekyll so GitHub Pages skips Jekyll processing
+- Removed all inline onclick= handlers; all event wiring moved to main.js
+- Replaced alert() with non-blocking toast notifications (src/ui/toast.js)
+- Added structured in-memory logger accessible via window.__CARV_LOG__.history()
+- Added JSDoc typedefs on all major data shapes (CNCData, PDFData, NozzleDef, etc.)
+
+NEW FILE STRUCTURE
+-----------------------------------------------------------------------
+src/
+  main.js             bootstrap — wires DOM events to logic pipeline
+  state.js            observable store, single source of truth
+  config/
+    nozzles.js        tolerances + fallback circumference constant
+  lib/
+    logger.js         structured logger with rolling buffer
+  parsers/
+    cnc.js            parseCNC() — pure function, no DOM
+    pdf.js            parsePDF() + autoDetectSeam() + extractNozzles()
+    seam.js           findSeamAngle() text pattern matching
+  domain/
+    angles.js         printToRTP(), angularDist() — pure math
+    validate.js       validateRun() — pure, returns full results object
+  ui/
+    dropzone.js       wireDrop()
+    results.js        renderResults() — DOM rendering only
+    debug.js          renderDebug() + wireDebugToggle()
+    toast.js          toast() — replaces alert()
+
+DYNAMIC NOZZLE EXTRACTION — removed hardcoded vessel config
+-----------------------------------------------------------------------
+- Removed hardcoded NOZZLES array (was specific to one vessel drawing)
+- Added extractNozzles() in parsers/pdf.js using PDF.js spatial text
+  positions to detect nozzle schedule from any drawing:
+    1. Groups text items into rows by Y-position proximity
+    2. Finds rows containing a nozzle designator (N1, N-1, N1A, etc.)
+    3. Pairs each with its orientation angle — prefers values with an
+       explicit degree symbol to avoid false matches on pipe sizes /
+       pressure ratings; falls back to multiples-of-5 heuristic
+    4. Falls back to line-by-line text scan if spatial pass finds nothing
+- parsePDF() now returns pdfData.nozzles[]
+- validateRun() reads nozzles from pdfData instead of a static import
+- End-cut stripping threshold is now dynamic (uses nozzles.length)
+- results.js table is dynamic:
+    - Nozzles detected  → full comparison table (Nozzle | Print Angle |
+      Expected RTP | CNC Angle | Axial X | Status)
+    - None detected     → raw CNC cuts table + manual verification prompt
+- Banner shows "NO NOZZLE SCHEDULE DETECTED" when extraction finds nothing
+- Added .nozzle-sub style for optional nozzle description labels
+
+BEHAVIOUR UNCHANGED
+-----------------------------------------------------------------------
+- Pipe OD check (print vs CNC circumference)
+- Seam angle auto-detection (spatial + text fallback)
+- Seam angle manual override
+- Horizontal / Vertical vessel orientation toggle
+- End cut identification and separate display
+- Scribe feature display
+- CNC parser debug panel
+- PDF raw text display
+- GitHub Pages compatible — open index.html link and it works, no install

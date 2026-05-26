@@ -1,0 +1,18 @@
+/**
+ * Single source of truth for app state. Plain mutable object — no observer
+ * pattern, since the current UI flow is fully driven by explicit event handlers.
+ */
+export const state = {
+  /** @type {File|null} */               pdfFile: null,
+  /** @type {File|null} */               cncFile: null,
+  /** @type {'H'|'V'} */                 orientation: 'H',
+  /** @type {number|null} */             seamAngle: null,
+  /** @type {string} */                  seamMethod: '',
+  /** @type {object|null} */             results: null,
+  /** In-flight seam autodetect promise — Check waits on this to avoid races.
+   *  @type {Promise<any>|null} */       seamDetectInFlight: null,
+};
+
+export function setState(patch) {
+  Object.assign(state, patch);
+}
