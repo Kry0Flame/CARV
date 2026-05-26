@@ -15,6 +15,12 @@ export function wireDrop(zoneId, inputId, nameId, acceptedExts, onFile) {
   const zone = document.getElementById(zoneId);
   const input = document.getElementById(inputId);
   const name = document.getElementById(nameId);
+
+  if (!zone || !input || !name) {
+    console.warn(`Dropzone elements missing from DOM: ${zoneId}, ${inputId}, ${nameId}`);
+    return;
+  }
+
   const exts = acceptedExts.map(e => e.toLowerCase());
 
   function accept(file) {

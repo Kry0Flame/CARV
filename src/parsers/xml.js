@@ -1,7 +1,8 @@
 /**
  * CARV XML Parser
  * Extracts Outer Diameter, Vessel Orientation, Seam Angle, and Nozzle Schedule
- * from Codeware COMPRESS XML exports using standard browser DOMParser.
+ * from Codeware COMPRESS XML exports using standard browser DOMParser in a
+ * namespace-insensitive, highly robust manner.
  */
 
 /**
@@ -22,6 +23,25 @@
  */
 
 /**
+ * Helper to retrieve child elements by their local tag name (namespace-insensitive).
+ *
+ * @param {Element|Document} parent
+ * @param {string} localName
+ * @returns {Element[]}
+ */
+function getElementsByLocalName(parent, localName) {
+  if (!parent) return [];
+  const all = parent.getElementsByTagName('*');
+  const matched = [];
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].localName === localName) {
+      matched.push(all[i]);
+    }
+  }
+  return matched;
+}
+
+/**
  * Parse Codeware COMPRESS XML data.
  *
  * @param {string} xmlText
@@ -32,24 +52,24 @@ export function parseXML(xmlText) {
   const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
   // Check for XML parsing errors
-  const parserError = xmlDoc.getElementsByTagName('parsererror')[0];
+  const parserError = getElementsByLocalName(xmlDoc, 'parsererror')[0];
   if (parserError) {
     throw new Error('XML parsing failed: ' + parserError.textContent);
   }
 
   // 1. Extract General Vessel Info (OD and Orientation)
-  const generalVesselInfo = xmlDoc.getElementsByTagName('generalVesselInfo')[0];
+  const generalVesselInfo = getElementsByLocalName(xmlDoc, 'generalVesselInfo')[0];
   let od = null;
   let orientation = 'H';
 
   if (generalVesselInfo) {
-    const odEl = generalVesselInfo.getElementsByTagName('outerDiameter')[0];
+    const odEl = getElementsByLocalName(generalVesselInfo, 'outerDiameter')[0];
     if (odEl) {
       od = parseFloat(odEl.textContent);
       if (Number.isNaN(od)) od = null;
     }
 
-    const orientEl = generalVesselInfo.getElementsByTagName('orientation')[0];
+    const orientEl = getElementsByLocalName(generalVesselInfo, 'orientation')[0];
     if (orientEl) {
       const orientText = orientEl.textContent.trim().toLowerCase();
       if (orientText === 'vertical' || orientText.startsWith('v')) {
@@ -63,7 +83,7 @@ export function parseXML(xmlText) {
   // 2. Extract Seam Angle
   let seamAngle = 0;
   let seamMethod = 'Not detected';
-  const seamEl = xmlDoc.getElementsByTagName('LongSeamStartingAngle')[0];
+  const seamEl = getElementsByLocalName(xmlDoc, 'LongSeamStartingAngle')[0];
   if (seamEl) {
     const val = parseFloat(seamEl.textContent);
     if (!Number.isNaN(val)) {
@@ -74,12 +94,12 @@ export function parseXML(xmlText) {
 
   // 3. Extract Nozzles
   const nozzles = [];
-  const nozzleEls = xmlDoc.getElementsByTagName('nozzle');
+  const nozzleEls = getElementsByLocalName(xmlDoc, 'nozzle');
 
   for (let i = 0; i < nozzleEls.length; i++) {
     const nEl = nozzleEls[i];
-    const idEl = nEl.getElementsByTagName('identifier')[0];
-    const angleEl = nEl.getElementsByTagName('orientationAngle')[0];
+    const idEl = getElementsByLocalName(nEl, 'identifier')[0];
+    const angleEl = getElementsByLocalName(nEl, 'orientationAngle')[0];
 
     if (!angleEl) continue;
 
