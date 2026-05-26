@@ -1,7 +1,8 @@
 /**
  * CARV XML Parser
  * Extracts Outer Diameter, Vessel Orientation, Seam Angle, Shell Type,
- * and Nozzle Schedule (with custom sorting) from Codeware COMPRESS XML exports.
+ * and Nozzle Schedule (with custom sorting prioritized by drawing mark)
+ * from Codeware COMPRESS XML exports.
  */
 
 /**
@@ -11,6 +12,7 @@
  * @property {string} label    NPS and schedule details
  * @property {number} category 1 = Pipe, 2 = Coupling, 3 = Other
  * @property {number} nominalSize NPS float size for sorting
+ * @property {number} markNumber Mark number in parentheses for sorting
  */
 
 /**
@@ -209,25 +211,40 @@ export function parseXML(xmlText) {
       }
     }
 
+    // Parse mark number in parenthesis at the end (e.g. "COIL FEED #1 (4)" -> 4)
+    let markNumber = 999;
+    const markMatch = name.match(/\((\d+)\)[^\(]*$/);
+    if (markMatch) {
+      const parsedMark = parseInt(markMatch[1], 10);
+      if (!Number.isNaN(parsedMark)) {
+        markNumber = parsedMark;
+      }
+    }
+
     nozzles.push({
       name,
       baseDeg: ((baseDeg % 360) + 360) % 360, // Normalize to 0-359
       label: npsText ? `(${npsText})` : `(${nOuterDiameter}" OD)`,
       category,
       nominalSize,
+      markNumber,
     });
   }
 
   // Custom Sort Logic:
   // 1. Pipes first (category 1), then Couplings (category 2), then Others (category 3)
   // 2. Within each category, largest nominal size to smallest nominal size (nominalSize descending)
-  // 3. Alphabetically by name for matching sizes
+  // 3. Within matching sizes, sort by mark number ascending (markNumber ascending: (1), then (2), then (3))
+  // 4. Alphabetically by name for other fallbacks
   nozzles.sort((a, b) => {
     if (a.category !== b.category) {
       return a.category - b.category;
     }
     if (a.nominalSize !== b.nominalSize) {
       return b.nominalSize - a.nominalSize; // Descending (largest to smallest)
+    }
+    if (a.markNumber !== b.markNumber) {
+      return a.markNumber - b.markNumber; // Ascending ((1) before (2))
     }
     return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   });
