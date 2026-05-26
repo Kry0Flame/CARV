@@ -69,15 +69,26 @@ wireDrop('dzXML', 'fileXML', 'nameXML', ['.xml'], (file) => {
       // Auto-set orientation
       setOrientation(xmlData.orientation);
 
-      // Auto-set seam angle if detected
-      if (xmlData.seamAngle !== 0) {
+      // Auto-configure seam angle UI based on shell classification
+      if (xmlData.shellType === 'seamless') {
+        seamInput.value = 0;
+        seamInput.style.borderColor = 'var(--green)';
+        seamInput.title = 'Seamless Pipe — No seam offset needed';
+        setState({ seamAngle: 0, seamMethod: xmlData.seamMethod });
+        logger.info('xml.seamTypeSeamless');
+      } else if (xmlData.shellType === 'welded-pipe') {
+        seamInput.value = '';
+        seamInput.style.borderColor = 'var(--yellow)';
+        seamInput.title = 'Welded Pipe — Requires manual weld seam entry based on machine load';
+        setState({ seamAngle: 0, seamMethod: xmlData.seamMethod });
+        logger.info('xml.seamTypeWeldedPipe');
+      } else {
+        // Rolled Shell - Auto-populate detected seam angle
         seamInput.value = xmlData.seamAngle;
         seamInput.style.borderColor = 'var(--green)';
         seamInput.title = xmlData.seamMethod;
         setState({ seamAngle: xmlData.seamAngle, seamMethod: xmlData.seamMethod });
-        logger.info('xml.seamAngleSet', { seamAngle: xmlData.seamAngle });
-      } else {
-        setState({ seamAngle: 0, seamMethod: 'Default' });
+        logger.info('xml.seamTypeRolledPlate', { seamAngle: xmlData.seamAngle });
       }
     } catch (err) {
       logger.warn('xml.preParseFailed', { message: err.message });
@@ -132,6 +143,8 @@ checkBtn.addEventListener('click', async () => {
       seamDetected,
     });
     results.seamMethod = seamMethod;
+    results.shellType = xmlData.shellType;
+    results.productForm = xmlData.productForm;
     setState({ results });
 
     renderResults(results);

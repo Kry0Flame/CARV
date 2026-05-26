@@ -1,15 +1,16 @@
 /**
  * CARV XML Parser
- * Extracts Outer Diameter, Vessel Orientation, Seam Angle, and Nozzle Schedule
- * from Codeware COMPRESS XML exports using standard browser DOMParser in a
- * namespace-insensitive, highly robust manner.
+ * Extracts Outer Diameter, Vessel Orientation, Seam Angle, Shell Type,
+ * and Nozzle Schedule (with custom sorting) from Codeware COMPRESS XML exports.
  */
 
 /**
  * @typedef {Object} NozzleDef
  * @property {string} name     e.g. "COIL RETURN #2 (3)"
  * @property {number} baseDeg  print/orientation angle (0–359)
- * @property {string} label    additional details if any
+ * @property {string} label    NPS and schedule details
+ * @property {number} category 1 = Pipe, 2 = Coupling, 3 = Other
+ * @property {number} nominalSize NPS float size for sorting
  */
 
 /**
@@ -18,6 +19,8 @@
  * @property {'H'|'V'} orientation
  * @property {number} seamAngle
  * @property {string} seamMethod
+ * @property {'seamless'|'welded-pipe'|'rolled-shell'} shellType
+ * @property {string} productForm
  * @property {NozzleDef[]} nozzles
  * @property {string} rawText
  */
@@ -80,15 +83,62 @@ export function parseXML(xmlText) {
     }
   }
 
-  // 2. Extract Seam Angle
+  // 2. Determine Shell Type and Seam Angle Logic
+  const cylinder = getElementsByLocalName(xmlDoc, 'cylinder')[0];
+  let productForm = '';
+  let shellType = 'rolled-shell';
   let seamAngle = 0;
   let seamMethod = 'Not detected';
-  const seamEl = getElementsByLocalName(xmlDoc, 'LongSeamStartingAngle')[0];
-  if (seamEl) {
-    const val = parseFloat(seamEl.textContent);
-    if (!Number.isNaN(val)) {
-      seamAngle = val;
-      seamMethod = 'Auto-detected (XML)';
+
+  if (cylinder) {
+    const compData = getElementsByLocalName(cylinder, 'standardComponentData')[0];
+    if (compData) {
+      const mat2 = getElementsByLocalName(compData, 'material2')[0];
+      if (mat2) {
+        const prodFormEl = getElementsByLocalName(mat2, 'productForm')[0];
+        if (prodFormEl) {
+          productForm = prodFormEl.textContent.trim();
+        }
+      }
+    }
+  }
+
+  const prodFormLower = productForm.toLowerCase();
+  
+  if (prodFormLower.includes('smls') || prodFormLower.includes('seamless')) {
+    shellType = 'seamless';
+    seamAngle = 0;
+    seamMethod = 'Seamless Pipe (no seam needed)';
+  } else if (prodFormLower.includes('pipe')) {
+    shellType = 'welded-pipe';
+    seamAngle = 0;
+    seamMethod = 'Welded Pipe (manual input required)';
+  } else {
+    shellType = 'rolled-shell';
+    
+    if (cylinder) {
+      const longSeam = getElementsByLocalName(cylinder, 'longSeam')[0];
+      if (longSeam) {
+        const seamAngleEl = getElementsByLocalName(longSeam, 'longSeamAngle')[0];
+        if (seamAngleEl) {
+          const val = parseFloat(seamAngleEl.textContent);
+          if (!Number.isNaN(val)) {
+            seamAngle = val;
+            seamMethod = 'Auto-detected (XML longSeamAngle)';
+          }
+        }
+      }
+    }
+    
+    if (seamMethod === 'Not detected') {
+      const globalSeamEl = getElementsByLocalName(xmlDoc, 'LongSeamStartingAngle')[0];
+      if (globalSeamEl) {
+        const val = parseFloat(globalSeamEl.textContent);
+        if (!Number.isNaN(val)) {
+          seamAngle = val;
+          seamMethod = 'Auto-detected (XML LongSeamStartingAngle)';
+        }
+      }
     }
   }
 
@@ -108,21 +158,87 @@ export function parseXML(xmlText) {
 
     const name = idEl ? idEl.textContent.trim() : `Nozzle #${i + 1}`;
 
+    // Size details
+    let npsText = '';
+    const npsEl = getElementsByLocalName(nEl, 'pipeNPSandSchedule')[0];
+    if (npsEl) {
+      npsText = npsEl.textContent.trim();
+    }
+
+    let nOuterDiameter = 0;
+    const odEl = getElementsByLocalName(nEl, 'outerDiameter')[0];
+    if (odEl) {
+      nOuterDiameter = parseFloat(odEl.textContent) || 0;
+    }
+
+    // Material details to classify as pipe, coupling, or other
+    let nProductForm = '';
+    let nMaterial = '';
+    const compData = getElementsByLocalName(nEl, 'standardComponentData')[0];
+    if (compData) {
+      const matEl = getElementsByLocalName(compData, 'material')[0];
+      if (matEl) nMaterial = matEl.textContent.trim();
+
+      const mat2 = getElementsByLocalName(compData, 'material2')[0];
+      if (mat2) {
+        const pfEl = getElementsByLocalName(mat2, 'productForm')[0];
+        if (pfEl) nProductForm = pfEl.textContent.trim();
+      }
+    }
+
+    // Classification Category:
+    // 1 = Pipe (contains 'pipe' or 'tube')
+    // 2 = Coupling (contains 'coupling', 'cplg', or 'fitting')
+    // 3 = Other
+    let category = 3;
+    const matchText = `${name} ${nProductForm} ${nMaterial} ${npsText}`.toLowerCase();
+    
+    if (matchText.includes('pipe') || matchText.includes('tube')) {
+      category = 1;
+    } else if (matchText.includes('coupling') || matchText.includes('cplg') || matchText.includes('fitting')) {
+      category = 2;
+    }
+
+    // Parse NPS float size for robust sorting (e.g. 1.5, 3, 5)
+    let nominalSize = nOuterDiameter; 
+    const npsMatch = npsText.match(/NPS\s+([\d.]+)/i);
+    if (npsMatch) {
+      const parsedSize = parseFloat(npsMatch[1]);
+      if (!Number.isNaN(parsedSize)) {
+        nominalSize = parsedSize;
+      }
+    }
+
     nozzles.push({
       name,
       baseDeg: ((baseDeg % 360) + 360) % 360, // Normalize to 0-359
-      label: '', // The user requested to use the calculation identifier as name, so label is empty
+      label: npsText ? `(${npsText})` : `(${nOuterDiameter}" OD)`,
+      category,
+      nominalSize,
     });
   }
 
-  // Sort nozzles by their parsed index or naturally by name
-  nozzles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  // Custom Sort Logic:
+  // 1. Pipes first (category 1), then Couplings (category 2), then Others (category 3)
+  // 2. Within each category, largest nominal size to smallest nominal size (nominalSize descending)
+  // 3. Alphabetically by name for matching sizes
+  nozzles.sort((a, b) => {
+    if (a.category !== b.category) {
+      return a.category - b.category;
+    }
+    if (a.nominalSize !== b.nominalSize) {
+      return b.nominalSize - a.nominalSize; // Descending (largest to smallest)
+    }
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
   return {
     od,
     orientation,
     seamAngle,
     seamMethod,
+    shellType,
+    productForm,
     nozzles,
     rawText: xmlText,
   };
