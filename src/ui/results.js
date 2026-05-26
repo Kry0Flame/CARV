@@ -166,18 +166,18 @@ export function renderResults(r) {
     scribeGrid.appendChild(chip);
   });
 
-  // ── Banner + PDF text (capped) ─────────────────────────────────────────
+  // ── Banner + XML text (capped) ─────────────────────────────────────────
   const banner = document.getElementById('statusBanner');
   banner.textContent = r.banner.text;
   banner.className = 'status-banner ' + r.banner.level;
 
   const text = r.pdfRawText || '';
   if (text.length > PDF_TEXT_PREVIEW_MAX) {
-    setText('pdfText',
+    setText('xmlText',
       text.slice(0, PDF_TEXT_PREVIEW_MAX) +
       `\n\n…[truncated — ${text.length - PDF_TEXT_PREVIEW_MAX} more characters]`);
   } else {
-    setText('pdfText', text);
+    setText('xmlText', text);
   }
 }
 

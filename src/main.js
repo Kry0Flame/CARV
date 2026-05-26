@@ -14,20 +14,16 @@ import { toast } from './ui/toast.js';
 import { renderResults } from './ui/results.js';
 import { renderDebug, wireDebugToggle } from './ui/debug.js';
 import { parseCNC } from './parsers/cnc.js';
-import { parsePDF, autoDetectSeam } from './parsers/pdf.js';
+import { parseXML } from './parsers/xml.js';
 import { validateRun } from './domain/validate.js';
 import { DEFAULT_CIRCUMFERENCE } from './config/nozzles.js';
 import { logger } from './lib/logger.js';
-
-// PDF.js worker (loaded as a global via CDN script tag in index.html)
-window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const seamInput = document.getElementById('seamAngle');
 const checkBtn  = document.getElementById('btnCheck');
 
 function updateBtn() {
-  if (state.pdfFile && state.cncFile) {
+  if (state.xmlFile && state.cncFile) {
     checkBtn.disabled = false;
     checkBtn.textContent = 'CHECK MY WORK';
   } else {
@@ -55,38 +51,40 @@ function clearSeamUI() {
 document.getElementById('togHoriz').addEventListener('click', () => setOrientation('H'));
 document.getElementById('togVert').addEventListener('click', () => setOrientation('V'));
 
-wireDrop('dzPDF', 'filePDF', 'namePDF', ['.pdf'], (file) => {
-  // Reset stale seam UI from any previous PDF before kicking off detection.
+wireDrop('dzXML', 'fileXML', 'nameXML', ['.xml'], (file) => {
+  // Reset stale seam UI from any previous XML before kicking off detection.
   clearSeamUI();
-  setState({ pdfFile: file, seamMethod: '' });
+  setState({ xmlFile: file, seamMethod: '' });
   // Drop the cache associated with the previous file (if any).
   delete file.__carvCache;
   updateBtn();
-  logger.info('pdf.loaded', { name: file.name, size: file.size });
+  logger.info('xml.loaded', { name: file.name, size: file.size });
 
-  // Kick off detection and store the promise so the Check handler can await it.
-  const detect = autoDetectSeam(file)
-    .then(({ angle, method }) => {
-      // Only apply if this file is still the active one (user may have dropped
-      // a different PDF while detection was running).
-      if (state.pdfFile !== file) return;
-      if (angle !== null) {
-        seamInput.value = angle;
+  // Pre-parse XML for metadata auto-configuration (orientation and seam angle)
+  file.text().then(xmlText => {
+    if (state.xmlFile !== file) return;
+    try {
+      const xmlData = parseXML(xmlText);
+      
+      // Auto-set orientation
+      setOrientation(xmlData.orientation);
+
+      // Auto-set seam angle if detected
+      if (xmlData.seamAngle !== 0) {
+        seamInput.value = xmlData.seamAngle;
         seamInput.style.borderColor = 'var(--green)';
-        seamInput.title = method;
-        setState({ seamAngle: angle, seamMethod: method });
-        logger.info('seam.detected', { angle, method });
+        seamInput.title = xmlData.seamMethod;
+        setState({ seamAngle: xmlData.seamAngle, seamMethod: xmlData.seamMethod });
+        logger.info('xml.seamAngleSet', { seamAngle: xmlData.seamAngle });
       } else {
-        logger.warn('seam.notDetected');
+        setState({ seamAngle: 0, seamMethod: 'Default' });
       }
-    })
-    .catch(err => {
-      logger.warn('seam.detectFailed', { message: err.message });
-    })
-    .finally(() => {
-      if (state.seamDetectInFlight === detect) setState({ seamDetectInFlight: null });
-    });
-  setState({ seamDetectInFlight: detect });
+    } catch (err) {
+      logger.warn('xml.preParseFailed', { message: err.message });
+    }
+  }).catch(err => {
+    logger.warn('xml.readFailed', { message: err.message });
+  });
 });
 
 wireDrop('dzCNC', 'fileCNC', 'nameCNC', ['.cnc', '.txt'], (file) => {
@@ -103,11 +101,6 @@ checkBtn.addEventListener('click', async () => {
   document.getElementById('results').style.display = 'none';
 
   try {
-    // Wait for any in-flight seam autodetect so we don't read a stale 0°.
-    if (state.seamDetectInFlight) {
-      await state.seamDetectInFlight;
-    }
-
     const seamRaw = seamInput.value.trim();
     const seamAngle = seamRaw === '' ? 0 : parseInt(seamRaw, 10);
     if (Number.isNaN(seamAngle) || seamAngle < 0 || seamAngle > 359) {
@@ -117,10 +110,11 @@ checkBtn.addEventListener('click', async () => {
     const seamMethod = seamInput.title || (seamDetected ? 'Entered manually' : '');
 
     logger.info('check.start', { orientation: state.orientation, seamAngle });
-    const [cncText, pdfData] = await Promise.all([
+    const [cncText, xmlText] = await Promise.all([
       state.cncFile.text(),
-      parsePDF(state.pdfFile),
+      state.xmlFile.text(),
     ]);
+    const xmlData = parseXML(xmlText);
     const cncData = parseCNC(cncText);
     logger.info('parse.complete', {
       features: cncData.features.length,
@@ -131,7 +125,8 @@ checkBtn.addEventListener('click', async () => {
     });
 
     const results = validateRun({
-      cncData, pdfData,
+      cncData,
+      pdfData: xmlData, // Keeping key as pdfData in domain parameter to prevent changes to validation engine
       seamAngle,
       orientation: state.orientation,
       seamDetected,

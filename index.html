@@ -35,12 +35,12 @@
   <main>
     <!-- File drop zones -->
     <div class="drop-row">
-      <div class="drop-zone" id="dzPDF" role="button" tabindex="0" aria-label="Upload certified drawing PDF">
-        <input type="file" accept=".pdf" id="filePDF" aria-label="Certified drawing PDF file" />
+      <div class="drop-zone" id="dzXML" role="button" tabindex="0" aria-label="Upload vessel XML file">
+        <input type="file" accept=".xml" id="fileXML" aria-label="Vessel XML file" />
         <div class="drop-icon" aria-hidden="true">📋</div>
-        <div class="drop-label">Certified Drawing (Print)</div>
-        <div class="drop-sub">Drop PDF here or click to browse</div>
-        <div class="drop-filename" id="namePDF"></div>
+        <div class="drop-label">Vessel XML Data (COMPRESS)</div>
+        <div class="drop-sub">Drop XML here or click to browse</div>
+        <div class="drop-filename" id="nameXML"></div>
       </div>
       <div class="drop-zone" id="dzCNC" role="button" tabindex="0" aria-label="Upload Rotary Tube CNC program">
         <input type="file" accept=".cnc,.CNC,.txt" id="fileCNC" aria-label="CNC program file" />
@@ -56,7 +56,7 @@
       <div class="seam-left">
         <label class="seam-label" for="seamAngle">
           Seam Angle
-          <span class="seam-hint">(auto-detected from print — type to override)</span>
+          <span class="seam-hint">(auto-detected from XML — type to override)</span>
         </label>
         <div class="seam-input-wrap">
           <input type="number" id="seamAngle" min="0" max="359" placeholder="e.g. 315"
@@ -84,7 +84,7 @@
     <div id="results">
       <div class="status-banner" id="statusBanner" role="status" aria-live="polite">—</div>
       <div class="seam-warn" id="seamWarn" role="alert">
-        ⚠️ Seam angle not detected from print — using 0°. Check PDF text below and set manually if needed.
+        ⚠️ Seam angle not detected from XML — using 0°. Check XML text below and set manually if needed.
       </div>
 
       <div class="cards">
@@ -178,9 +178,9 @@
       </div>
       <div class="debug-panel" id="debugPanel"></div>
 
-      <!-- PDF text -->
-      <div class="section-header"><h2>📄 PDF TEXT EXTRACTED</h2></div>
-      <div class="pdf-preview" id="pdfText"></div>
+      <!-- XML text -->
+      <div class="section-header"><h2>📄 XML DATA EXTRACTED</h2></div>
+      <div class="pdf-preview" id="xmlText"></div>
     </div>
   </main>
 
