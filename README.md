@@ -1,30 +1,6 @@
 # CARV
 Cut Accuracy Review and Verification - CNC program cecker for Rotary Tube Pro pipe vessel fabrication.
 
-Listed directory CARV
-Listed directory Program
-Listed directory CARV
-Listed directory src
-Viewed README.md:1-3
-Listed directory config
-Listed directory domain
-Listed directory lib
-Listed directory parsers
-Listed directory ui
-Viewed index.html:1-190
-Viewed main.js:1-163
-Viewed state.js:1-19
-Viewed nozzles.js:1-9
-Viewed pdf.js:1-22
-Viewed pdf.js:1-220
-Viewed seam.js:1-91
-Viewed cnc.js:1-161
-Viewed angles.js:1-28
-Viewed validate.js:1-153
-Viewed results.js:1-226
-Viewed debug.js:1-36
-Viewed dropzone.js:1-49
-Viewed toast.js:1-29
 
 ### Overview & Objective
 
